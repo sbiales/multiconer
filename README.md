@@ -22,3 +22,9 @@ Models can be found in the `models` directory.
 
 ### Base model
 The `base_model.py` is a basic transformers implementation of the NER task. The purpose of it is to provide a baseline of how well a transformer model can perform without external/additional data.
+
+### Multitask model
+The `multitask_model.py` combines the task of NER tagging with POS tagging. It uses the same shared encoder for both tasks, while using separate heads. The goal is to see whether adding additional POS information and training simultaneously on both tasks improves results.
+
+## Hyperparameter Tuning
+There are jupyter notebooks for performing hyperparameter sweeps via `wandb`. First configure the sweep parameters in the file, and then run the notebook.

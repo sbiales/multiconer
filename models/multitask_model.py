@@ -4,8 +4,9 @@ import torch.nn as nn
 import transformers
 from datasets import load_dataset
 import argparse
+import wandb
+from os.path import join
 
-import dataclasses
 from torch.utils.data.dataloader import DataLoader
 from transformers.data.data_collator import DataCollator, InputDataClass
 from torch.utils.data.distributed import DistributedSampler
@@ -103,11 +104,11 @@ def align_labels_with_tokens(labels, word_ids, task_name):
         if word_id != current_word:
             # Start of a new word!
             current_word = word_id
-            label = 0 if word_id is None else labels[word_id]
+            label = -100 if word_id is None else labels[word_id]
             new_labels.append(label)
         elif word_id is None:
             # Special tokens get a label of -100
-            new_labels.append(0)
+            new_labels.append(-100)
         else:
             # Same word as previous token
             label = labels[word_id]
@@ -183,7 +184,7 @@ class NLPDataCollator:
             return batch
         else:
             # otherwise, revert to using the default collate_batch
-            return DefaultDataCollator().collate_batch(features)
+            return DataCollator().collate_batch(features)
 
 
 class StrIgnoreDevice(str):
@@ -300,6 +301,13 @@ class MultitaskTrainer(transformers.Trainer):
 
 
 #############################################################################
+#                                  Metrics                                  #
+#############################################################################
+
+# TODO?
+
+
+#############################################################################
 #                                   Main                                    #
 #############################################################################
 
@@ -313,12 +321,18 @@ def main(args):
     ignore_verifications=True)
     if args.lang:
         raw_datasets = raw_datasets.filter(lambda example: example["domain"] == args.lang)
+        lang = args.lang
+    else:
+        lang = 'multi'
     raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': label2id})
 
     dataset_dict = {
         "ner": raw_datasets.remove_columns(['pos_tags', 'pos_tags_numeric']),
         "pos": raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric']),
     }
+
+    # Initialize wandb
+    wandb.init(project="thesis", config=args)
 
     # create the corresponding task models by supplying the invidual model classes and model configs
     model_name = args.model
@@ -376,7 +390,8 @@ def main(args):
     trainer = MultitaskTrainer(
         model=multitask_model,
         args=transformers.TrainingArguments(
-            output_dir="multitask_model",
+            output_dir=join(args.out_dir, lang + '-multitask'),
+            report_to='wandb',
             overwrite_output_dir=True,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
@@ -388,6 +403,7 @@ def main(args):
         ),
         data_collator=NLPDataCollator(),
         train_dataset=train_dataset,
+        #compute_metrics=compute_metrics
     )
     trainer.train()
 
@@ -399,6 +415,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dev', type=str, help='The path to the dev/validation json file', default='.\\data\\dev.json')
     parser.add_argument('-m', '--model', type=str, help='The model checkpoint to use', default='xlm-roberta-base')
     parser.add_argument('-l', '--lang', type=str, help='Which language to train. If none provided, train on all')
+    parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default='.\\results')
 
     # Training arguments
     parser.add_argument('-bs', '--batch_size', type=int, help='Batch size.', default=16)
