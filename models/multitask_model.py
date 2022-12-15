@@ -12,7 +12,7 @@ from transformers.data.data_collator import DataCollator, InputDataClass
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler
 from typing import List, Union, Dict
-import transformers
+import evaluate
 
 label2id = { 'O': 0, 'B-Station': 1, 'I-Station': 2, 'B-Facility': 3, 'I-Facility': 4, 'B-HumanSettlement': 5, 'I-HumanSettlement': 6, 'B-OtherLOC': 7, 'I-OtherLOC': 8,
  'B-Symptom': 9, 'I-Symptom': 10, 'B-Medication/Vaccine': 11, 'I-Medication/Vaccine': 12, 'B-MedicalProcedure': 13, 'I-MedicalProcedure': 14, 'B-AnatomicalStructure': 15,
@@ -286,6 +286,30 @@ class MultitaskTrainer(transformers.Trainer):
         )
         return data_loader
 
+    def get_single_eval_dataloader(self, task_name, eval_dataset):
+        """
+        Create a single-task data loader that also yields task names
+        """
+        if self.eval_dataset is None:
+            raise ValueError("Trainer: evaluation requires a eval_dataset.")
+
+        eval_sampler = (
+            RandomSampler(eval_dataset)
+            if self.args.local_rank == -1
+            else DistributedSampler(eval_dataset)
+        )
+
+        data_loader = DataLoaderWithTaskname(
+            task_name=task_name,
+            data_loader=DataLoader(
+                eval_dataset,
+                batch_size=self.args.eval_batch_size,
+                sampler=eval_sampler,
+                collate_fn=self.data_collator,
+            ),
+        )
+        return data_loader
+
     def get_train_dataloader(self):
         """
         Returns a MultitaskDataloader, which is not actually a Dataloader
@@ -299,12 +323,37 @@ class MultitaskTrainer(transformers.Trainer):
             }
         )
 
+    def get_eval_dataloader(self, eval_dataset=None):
+        """
+        Returns a MultitaskDataloader, which is not actually a Dataloader
+        but an iterable that returns a generator that samples from each
+        task Dataloader
+        """
+        return self.get_single_eval_dataloader('ner', self.eval_dataset)
+
 
 #############################################################################
 #                                  Metrics                                  #
 #############################################################################
 
-# TODO?
+def compute_metrics(eval_preds):
+    metric = evaluate.load("seqeval")
+    logits, labels = eval_preds
+    predictions = np.argmax(logits, axis=-1)
+
+    # Remove ignored index (special tokens) and convert to labels
+    true_labels = [[id2label[l] for l in label if l != -100] for label in labels]
+    true_predictions = [
+        [id2label[p] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    all_metrics = metric.compute(predictions=true_predictions, references=true_labels)
+    return {
+        "precision": all_metrics["overall_precision"],
+        "recall": all_metrics["overall_recall"],
+        "f1": all_metrics["overall_f1"],
+        "accuracy": all_metrics["overall_accuracy"],
+    }
 
 
 #############################################################################
@@ -387,6 +436,11 @@ def main(args):
         task_name: dataset["train"] 
         for task_name, dataset in features_dict.items()
     }
+    eval_dataset = {
+        task_name: dataset["validation"] 
+        for task_name, dataset in features_dict.items()
+    }
+
     trainer = MultitaskTrainer(
         model=multitask_model,
         args=transformers.TrainingArguments(
@@ -400,10 +454,12 @@ def main(args):
             per_device_train_batch_size=args.batch_size,
             per_device_eval_batch_size=args.batch_size,
             save_steps=3000,
+            evaluation_strategy="epoch"
         ),
         data_collator=NLPDataCollator(),
         train_dataset=train_dataset,
-        #compute_metrics=compute_metrics
+        eval_dataset=eval_dataset['ner'],
+        compute_metrics=compute_metrics
     )
     trainer.train()
 
