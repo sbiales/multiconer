@@ -2,7 +2,7 @@
 This is an implementation of multilingual complex named entity recognition as described in the SemEval 2023 Task 2: MultiCoNER II task description.
 
 ## Setup
-This repository was written using Python 3.8.10 on Windows.
+This repository was written using Python 3.8.10 on Windows. It requires at least Python 3.7 (for the `evaluate` package)
 
 When cloning this repository, first install all dependencies in your environment.
 
