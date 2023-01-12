@@ -12,6 +12,12 @@ from os.path import join
 import stanza
 from bnlp import POS
 
+bn2upos = { 'ALC': 'ADV', 'AMN': 'ADV', 'CCD': 'CCONJ', 'CCL': 'PART', 'CSB': 'SCONJ', 'CX': 'PART', 'CIN': 'INTJ', 'DAB': 'PRON', 'DRL': 'PRON', 'DWH': 'PRON', 
+    'JJ': 'ADJ', 'JQ': 'DET', 'LC': 'VERB', 'LV': 'VERB', 'NC': 'NOUN', 'NP': 'PROPN', 'NST': 'NOUN', 'NV': 'NOUN', 'PP': 'ADP', 'PPR': 'PRON', 'PRF': 'PRON', 
+    'PRC': 'PRON', 'PRL': 'PRON', 'PU': 'PUNCT', 'PWH': 'PRON', 'RDF': 'X', 'RDS': 'SYM', 'RDX': 'X', 'VAUX': 'AUX', 'VM': 'VERB'
+    }
+
+
 def main(args):
     data_path = join(args.path, f'*-{args.split}.conll')
     files = glob.glob(data_path)
@@ -21,9 +27,10 @@ def main(args):
         domain_ds = read_conllu(f)
         sents = [obj['tokens'] for obj in domain_ds]
         domain = domain_ds[0]['domain']
-        pos_tags = pos_tag_batch(sents, domain)
+        tags = pos_tag_batch(sents, domain)
         for i,obj in enumerate(domain_ds):
-            obj['pos_tags'] = pos_tags[i]
+            obj['pos_tags'] = tags[i]['pos_tags']
+            obj['dep_tags'] = tags[i]['dep_tags']
         dataset.extend(domain_ds)
 
     ds_json = json.dumps(dataset, ensure_ascii=False)
@@ -97,17 +104,21 @@ def pos_tag_batch(sents, domain):
     '''
     # Stanza doesn't support Bangla
     if domain != 'bn':
-        nlp = stanza.Pipeline(lang=domain, processors='tokenize,pos',
-                            verbose=True, use_gpu=True, tokenize_pretokenized=True)
+        nlp = stanza.Pipeline(lang=domain, processors='tokenize,pos,lemma,depparse',
+                          verbose=True, use_gpu=True, tokenize_pretokenized=True)
         doc = nlp(sents)
-        tags = [[word.upos for word in sent.words] for sent in doc.sentences]
+        tags = [{'pos_tags': [word.upos for word in sent.words],
+                'dep_tags': [word.deprel for word in sent.words]}
+            for sent in doc.sentences]
     elif domain == 'bn':
         tags = []
         bn_pos = POS()
         model_path = "utils/bn_pos.pkl"
         for s in sents:
             doc = bn_pos.tag(model_path, s)
-            tags.append([x[1] for x in doc])
+            tags.append({
+                'pos_tags': [bn2upos[x[1]] for x in doc],
+                'dep_tags': ['' for x in doc]})
     return tags
 
 if __name__ == '__main__':
