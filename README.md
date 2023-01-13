@@ -15,7 +15,7 @@ train.json: `python utils/process_conll.py -p <path-to-corpus-files> -s train`
 
 dev.json:   `python utils/process_conll.py -p <path-to-corpus-files> -s dev`
 
-This step also uses Stanza and bnlp-toolkit (for Bangla) to add POS tags to the files in addition to what is already found in the corpus, which is what causes this to take a little longer to run. It is recommended to run it using a GPU (default).
+This step also uses Stanza and bnlp-toolkit (for Bangla) to add POS and UD tags to the files in addition to what is already found in the corpus, which is what causes this to take a little longer to run. It is recommended to run it using a GPU (default).
 
 ## Models
 Models can be found in the `models` directory.

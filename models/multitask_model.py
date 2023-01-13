@@ -22,8 +22,20 @@ label2id = { 'O': 0, 'B-Station': 1, 'I-Station': 2, 'B-Facility': 3, 'I-Facilit
  'B-MusicalGRP': 45, 'I-MusicalGRP': 46, 'B-AerospaceManufacturer': 47, 'I-AerospaceManufacturer': 48, 'B-PublicCorp': 49, 'I-PublicCorp': 50, 'B-SportsGRP': 51, 'I-SportsGRP': 52,
  'B-PrivateCorp': 53, 'I-PrivateCorp': 54, 'B-CarManufacturer': 55, 'I-CarManufacturer': 56, 'B-WrittenWork': 57, 'I-WrittenWork': 58, 'B-MusicalWork': 59, 'I-MusicalWork': 60,
  'B-VisualWork': 61, 'I-VisualWork': 62, 'B-ArtWork': 63, 'I-ArtWork': 64, 'B-Software': 65, 'I-Software': 66,
- 'CCONJ': 67, 'AUX': 68, 'DET': 69, 'VERB': 70, 'SYM': 71, 'INTJ': 72, 'PROPN': 73, 'ADJ': 74, 'NOUN': 75, 'PART': 76, 'X': 77, 'NUM': 78, 'SCONJ': 79, 'ADV': 80, 'PUNCT': 81,
- 'ADP': 82, 'PRON': 83 }
+  # POS tags
+  'CCONJ': 67, 'AUX': 68, 'DET': 69, 'VERB': 70, 'SYM': 71, 'INTJ': 72, 'PROPN': 73, 'ADJ': 74, 'NOUN': 75, 'PART': 76, 'X': 77, 'NUM': 78, 'SCONJ': 79, 'ADV': 80, 'PUNCT': 81,
+  'ADP': 82, 'PRON': 83,
+  # UD tags
+  'nmod': 84, 'det': 85, 'discourse:emo': 86, 'vocative:mention': 87, 'cc': 88, 'csubj:pass': 89, 'det:numgov': 90, 'det:poss': 91, 'obj': 92, 'parataxis:discourse': 93,
+  'advcl:svc': 94, 'conj:svc': 95, 'expl:subj': 96, 'xcomp:sp': 97, 'obl:npmod': 98, 'mark': 99, 'mark:adv': 100, 'cc:preconj': 101, 'aux': 102, 'advmod:det': 103,
+  'parataxis': 104, 'flat:num': 105, 'nummod:gov': 106, 'compound': 107, 'obl': 108, 'expl': 109, 'flat:name': 110, 'obl:agent': 111, 'discourse': 112, 'obl:patient': 113,
+  'obj:lvc': 114, 'flat:sibl': 115, 'nmod:tmod': 116, 'goeswith': 117, 'nummod': 118, 'nsubj:pass': 119, 'aux:pass': 120, 'punct': 121, 'aux:tense': 122, 'dislocated': 123,
+  'nmod:poss': 124, 'advcl:cleft': 125, 'flat:title': 126, 'parataxis:appos': 127, 'ccomp': 128, 'clf': 129, 'advcl': 130, 'list': 131, 'iobj:agent': 132, 'compound:prt': 133,
+  'nsubj': 134, 'flat:range': 135, 'det:nummod': 136, 'amod': 137, 'root': 138, 'aux:caus': 139, 'flat:foreign': 140, 'conj': 141, 'nsubj:caus': 142, 'expl:impers': 143,
+  'advmod': 144, 'cop': 145, 'advcl:sp': 146, 'compound:ext': 147, 'det:predet': 148, 'dep': 149, 'expl:pass': 150, 'discourse:sp': 151, 'xcomp': 152, 'obj:agent': 153,
+  'obl:mod': 154, 'fixed': 155, 'flat': 156, 'acl:relcl': 157, 'flat:repeat': 158, 'obl:tmod': 159, 'case': 160, 'nmod:npmod': 161, 'vocative': 162, 'appos': 163, 'acl': 164,
+  'acl:adv': 165, 'acl:cleft': 166, 'reparandum': 167, 'obl:arg': 168, 'flat:abs': 169, 'iobj': 170, 'csubj': 171, 'orphan': 172, 'dep:comp': 173, 'expl:pv': 174,
+  'compound:lvc': 175, 'mark:rel': 176 }
 id2label = { i:c for c,i in label2id.items() }
 
 #############################################################################
@@ -93,6 +105,7 @@ class MultitaskModel(transformers.PreTrainedModel):
 def convert(obj, classes):
   obj['ner_tags_numeric'] = [classes[t] for t in obj['ner_tags']]
   obj['pos_tags_numeric'] = [classes[t] for t in obj['pos_tags']]
+  obj['dep_tags_numeric'] = [classes[t] for t in obj['dep_tags']]
   return obj
 
 def align_labels_with_tokens(labels, word_ids, task_name):
@@ -145,6 +158,20 @@ def convert_to_pos_features(examples, tokenizer):
     for i, labels in enumerate(all_labels):
         word_ids = tokenized_inputs.word_ids(i)
         new_labels.append(align_labels_with_tokens(labels, word_ids, 'pos'))
+
+    tokenized_inputs["labels"] = new_labels
+    return tokenized_inputs
+
+def convert_to_dep_features(examples, tokenizer):
+    tokenized_inputs = tokenizer(
+        examples['tokens'], truncation=True, is_split_into_words=True,
+        padding='max_length'
+    )
+    all_labels = examples['dep_tags_numeric']
+    new_labels = []
+    for i, labels in enumerate(all_labels):
+        word_ids = tokenized_inputs.word_ids(i)
+        new_labels.append(align_labels_with_tokens(labels, word_ids, 'dep'))
 
     tokenized_inputs["labels"] = new_labels
     return tokenized_inputs
@@ -369,34 +396,40 @@ def main(args):
     chunksize=40<<20,
     ignore_verifications=True)
     if args.lang:
-        raw_datasets = raw_datasets.filter(lambda example: example["domain"] == args.lang)
+        raw_datasets = raw_datasets.filter(lambda example: example['domain'] == args.lang)
         lang = args.lang
     else:
         lang = 'multi'
     raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': label2id})
 
     dataset_dict = {
-        "ner": raw_datasets.remove_columns(['pos_tags', 'pos_tags_numeric']),
-        "pos": raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric']),
+        'ner': raw_datasets.remove_columns(['pos_tags', 'pos_tags_numeric', 'dep_tags', 'dep_tags_numeric']),
+        'pos': raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric', 'dep_tags', 'dep_tags_numeric']),
+        'dep': raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric', 'pos_tags', 'pos_tags_numeric']),
     }
 
     # Initialize wandb
-    wandb.init(project="thesis", config=args)
+    wandb.init(project='thesis', config=args)
 
     # create the corresponding task models by supplying the invidual model classes and model configs
     model_name = args.model
     multitask_model = MultitaskModel.create(
         model_name=model_name,
         model_type_dict={
-            "ner": transformers.AutoModelForTokenClassification,
-            "pos": transformers.AutoModelForTokenClassification,
+            'ner': transformers.AutoModelForTokenClassification,
+            'pos': transformers.AutoModelForTokenClassification,
+            "dep": transformers.AutoModelForTokenClassification,
         },
         model_config_dict={
-            "ner": transformers.AutoConfig.from_pretrained(model_name,
+            'ner': transformers.AutoConfig.from_pretrained(model_name,
                     num_labels=len(label2id.keys()),
                     id2label=id2label,
                     label2id=label2id),
-            "pos": transformers.AutoConfig.from_pretrained(model_name,
+            'pos': transformers.AutoConfig.from_pretrained(model_name,
+                    num_labels=len(label2id.keys()),
+                    id2label=id2label,
+                    label2id=label2id),
+            'dep': transformers.AutoConfig.from_pretrained(model_name,
                     num_labels=len(label2id.keys()),
                     id2label=id2label,
                     label2id=label2id),
@@ -406,13 +439,15 @@ def main(args):
     #  convert from raw text to tokenized text inputs
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
     convert_func_dict = {
-        "ner": convert_to_ner_features,
-        "pos": convert_to_pos_features,
+        'ner': convert_to_ner_features,
+        'pos': convert_to_pos_features,
+        'dep': convert_to_dep_features,
     }
 
     columns_dict = {
-        "ner": ['input_ids', 'attention_mask', 'labels'],
-        "pos": ['input_ids', 'attention_mask', 'labels']
+        'ner': ['input_ids', 'attention_mask', 'labels'],
+        'pos': ['input_ids', 'attention_mask', 'labels'],
+        'dep': ['input_ids', 'attention_mask', 'labels'],
     }
 
     features_dict = {}
@@ -433,11 +468,11 @@ def main(args):
             print(task_name, phase, len(phase_dataset), len(features_dict[task_name][phase]))
 
     train_dataset = {
-        task_name: dataset["train"] 
+        task_name: dataset['train'] 
         for task_name, dataset in features_dict.items()
     }
     eval_dataset = {
-        task_name: dataset["validation"] 
+        task_name: dataset['validation'] 
         for task_name, dataset in features_dict.items()
     }
 
@@ -454,7 +489,7 @@ def main(args):
             per_device_train_batch_size=args.batch_size,
             per_device_eval_batch_size=args.batch_size,
             save_steps=3000,
-            evaluation_strategy="epoch"
+            evaluation_strategy='epoch'
         ),
         data_collator=NLPDataCollator(),
         train_dataset=train_dataset,
