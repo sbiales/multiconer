@@ -5,16 +5,7 @@ import evaluate
 import numpy as np
 import wandb
 
-label2id = { 'O': 0, 'B-Station': 1, 'I-Station': 2, 'B-Facility': 3, 'I-Facility': 4, 'B-HumanSettlement': 5, 'I-HumanSettlement': 6, 'B-OtherLOC': 7, 'I-OtherLOC': 8,
- 'B-Symptom': 9, 'I-Symptom': 10, 'B-Medication/Vaccine': 11, 'I-Medication/Vaccine': 12, 'B-MedicalProcedure': 13, 'I-MedicalProcedure': 14, 'B-AnatomicalStructure': 15,
- 'I-AnatomicalStructure': 16, 'B-Disease': 17, 'I-Disease': 18, 'B-Clothing': 19, 'I-Clothing': 20, 'B-OtherPROD': 21, 'I-OtherPROD': 22, 'B-Vehicle': 23, 'I-Vehicle': 24,
- 'B-Food': 25, 'I-Food': 26, 'B-Drink': 27, 'I-Drink': 28, 'B-Artist': 29, 'I-Artist': 30, 'B-Scientist': 31, 'I-Scientist': 32, 'B-OtherPER': 33, 'I-OtherPER': 34,
- 'B-Athlete': 35, 'I-Athlete': 36, 'B-SportsManager': 37, 'I-SportsManager': 38, 'B-Politician': 39, 'I-Politician': 40, 'B-Cleric': 41, 'I-Cleric': 42, 'B-ORG': 43, 'I-ORG': 44,
- 'B-MusicalGRP': 45, 'I-MusicalGRP': 46, 'B-AerospaceManufacturer': 47, 'I-AerospaceManufacturer': 48, 'B-PublicCorp': 49, 'I-PublicCorp': 50, 'B-SportsGRP': 51, 'I-SportsGRP': 52,
- 'B-PrivateCorp': 53, 'I-PrivateCorp': 54, 'B-CarManufacturer': 55, 'I-CarManufacturer': 56, 'B-WrittenWork': 57, 'I-WrittenWork': 58, 'B-MusicalWork': 59, 'I-MusicalWork': 60,
- 'B-VisualWork': 61, 'I-VisualWork': 62, 'B-ArtWork': 63, 'I-ArtWork': 64, 'B-Software': 65, 'I-Software': 66 }
-id2label = { i:c for c,i in label2id.items() }
-LANGCODES = ['bn', 'de', 'en', 'es', 'fa', 'fr', 'hi', 'it', 'pt', 'sv', 'uk', 'zh']
+from models import LANGCODES, NER_LABEL2ID, NER_ID2LABEL
 
 def main(args):
     # Load the train and dev dataset files into a HuggingFace dataset
@@ -26,7 +17,7 @@ def main(args):
     ignore_verifications=True)
     if args.lang:
         raw_datasets = raw_datasets.filter(lambda example: example["domain"] == args.lang)
-    raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': label2id})
+    raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': NER_LABEL2ID})
 
     # Tokenize the datasets and align labels
     tokenizer = AutoTokenizer.from_pretrained(args.model)
@@ -41,8 +32,8 @@ def main(args):
     
     model = AutoModelForTokenClassification.from_pretrained(
         args.model,
-        id2label=id2label,
-        label2id=label2id,
+        id2label=NER_ID2LABEL,
+        label2id=NER_LABEL2ID,
     )
 
     # Initialize wandb
@@ -119,9 +110,9 @@ def compute_metrics(eval_preds):
     predictions = np.argmax(logits, axis=-1)
 
     # Remove ignored index (special tokens) and convert to labels
-    true_labels = [[id2label[l] for l in label if l != -100] for label in labels]
+    true_labels = [[NER_ID2LABEL[l] for l in label if l != -100] for label in labels]
     true_predictions = [
-        [id2label[p] for (p, l) in zip(prediction, label) if l != -100]
+        [NER_ID2LABEL[p] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
     all_metrics = metric.compute(predictions=true_predictions, references=true_labels)
@@ -150,6 +141,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    assert args.lang in LANGCODES
+    if args.lang:
+        assert args.lang in LANGCODES
 
     main(args)
