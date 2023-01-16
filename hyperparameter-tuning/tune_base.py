@@ -123,7 +123,7 @@ def train(config=None):
 
     # set training arguments
     training_args = TrainingArguments(
-        output_dir=join('sweeps', f'{lang}-base-sweeps'),
+        output_dir=join('hyperparameter-tuning', 'sweeps', f'{lang}-base-sweeps'),
 	    report_to='wandb',  # Turn on Weights & Biases logging
         num_train_epochs=config.epochs,
         learning_rate=config.learning_rate,
@@ -155,5 +155,4 @@ def train(config=None):
 #############################################
 #                Sweep Setup                #
 #############################################
-if __name__ == "_main_":
-    train()
+train()

@@ -215,7 +215,7 @@ def train(config=None):
     trainer = MultitaskTrainer(
         model=multitask_model,
         args=transformers.TrainingArguments(
-            output_dir=join('sweeps', f'{lang}-multitask-sweeps'),
+            output_dir=join('hyperparameter-tuning', 'sweeps', f'{lang}-multitask-sweeps'),
             overwrite_output_dir=True,
             do_train=True,
             report_to='wandb',  # Turn on Weights & Biases logging
@@ -239,5 +239,4 @@ def train(config=None):
 #############################################
 #                Sweep Setup                #
 #############################################
-if __name__ == "_main_":
-    train()
+train()
