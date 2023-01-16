@@ -123,17 +123,16 @@ def train(config=None):
 
     # set training arguments
     training_args = TrainingArguments(
-        output_dir=f'{lang}-base-sweeps',
+        output_dir=join('sweeps', f'{lang}-base-sweeps'),
 	    report_to='wandb',  # Turn on Weights & Biases logging
         num_train_epochs=config.epochs,
         learning_rate=config.learning_rate,
         weight_decay=config.weight_decay,
         per_device_train_batch_size=config.batch_size,
         per_device_eval_batch_size=16,
-        save_strategy='epoch',
+        save_strategy='no',
         evaluation_strategy='epoch',
         logging_strategy='epoch',
-        load_best_model_at_end=True,
         remove_unused_columns=False
     )
 

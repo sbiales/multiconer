@@ -224,8 +224,8 @@ def train(config=None):
             weight_decay=config.weight_decay,
             per_device_train_batch_size=config.batch_size,
             per_device_eval_batch_size=config.batch_size,
-            save_steps=3000,
-            evaluation_strategy="epoch"
+            save_strategy='no',
+            evaluation_strategy='epoch'
         ),
         data_collator=NLPDataCollator(),
         train_dataset=train_dataset,
