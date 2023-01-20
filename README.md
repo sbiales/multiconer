@@ -17,7 +17,7 @@ train.json: `python utils/process_conll.py -p <path-to-corpus-files> -s train`
 
 dev.json:   `python utils/process_conll.py -p <path-to-corpus-files> -s dev`
 
-This step also uses Stanza and bnlp-toolkit (for Bangla) to add POS and UD tags (currently no UD tags for Bangla) to the files in addition to what is already found in the corpus, which is what causes this to take a little longer to run. It is recommended to run it using a GPU (default).
+This step also uses Stanza and bnlp-toolkit (for Bangla) to add POS and dependency relation tags (currently no UD tags for Bangla) to the files in addition to what is already found in the corpus, which is what causes this to take a little longer to run. It is recommended to run it using a GPU (default).
 
 ## Models
 Models for training can be found in the `train` directory.
@@ -26,9 +26,13 @@ Models for training can be found in the `train` directory.
 The `train_base.py` is a basic transformers implementation of the NER task. The purpose of it is to provide a baseline of how well a transformer model can perform without external/additional data.
 
 ### Multitask model
-The `train_multitask.py` combines the task of NER tagging with POS tagging. It uses the same shared encoder for both tasks, while using separate heads. The goal is to see whether adding additional POS information and training simultaneously on both tasks improves results.
+The `train_multitask.py` combines the task of NER tagging with POS tagging and dependency relation tags. It uses the same shared encoder for both tasks, while using separate heads. The goal is to see whether adding additional POS information and training simultaneously on both tasks improves results.
 
 ## Hyperparameter Tuning
 There are jupyter notebooks for performing hyperparameter sweeps via `wandb`. First configure the sweep parameters in the file, and then run the notebook.
 
 If you would prefer to avoid using jupyter, there are .py files as well. First configure the sweep parameters in the corresponding .yaml file. Note that if you are using a virtual environment, you will have to specify the location of the python executible to use. Otherwise, you can remove the `command` section. Then, in your CLI from the `hyperparameter-tuning` directory, run `wandb sweep --project <wandb project> <path to .yaml file>`. Make note of the sweep ID. Next run `wandb agent --count <num runs> <sweep ID>` to begin the sweep. Be sure to use the full ID path provided from the previous step.
+
+## Predictions
+Scripts for preditions can be found in the `predict` directory.
+
