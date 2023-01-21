@@ -19,6 +19,8 @@ dev.json:   `python utils/process_conll.py -p <path-to-corpus-files> -s dev`
 
 This step also uses Stanza and bnlp-toolkit (for Bangla) to add POS and dependency relation tags (currently no UD tags for Bangla) to the files in addition to what is already found in the corpus, which is what causes this to take a little longer to run. It is recommended to run it using a GPU (default).
 
+Note: For preprocessing test data, see the "Predictions" section.
+
 ## Models
 Models for training can be found in the `train` directory.
 
@@ -34,5 +36,8 @@ There are jupyter notebooks for performing hyperparameter sweeps via `wandb`. Fi
 If you would prefer to avoid using jupyter, there are .py files as well. First configure the sweep parameters in the corresponding .yaml file. Note that if you are using a virtual environment, you will have to specify the location of the python executible to use. Otherwise, you can remove the `command` section. Then, in your CLI from the `hyperparameter-tuning` directory, run `wandb sweep --project <wandb project> <path to .yaml file>`. Make note of the sweep ID. Next run `wandb agent --count <num runs> <sweep ID>` to begin the sweep. Be sure to use the full ID path provided from the previous step.
 
 ## Predictions
-Scripts for preditions can be found in the `predict` directory.
+Scripts for preditions can be found in the `predict` directory. By default, prediction files will be generated under `predict/predictions`.
 
+The `predict_multitask.py` file can only be used with dev (labeled) data. It is made to be used with the same dataset that the training/tuning scripts use, produced by the `utils/process_conll.py` script.
+
+The `predict_multitask_test.py` script makes predictions on a test set without any labels. To generate this test set, run the test .conll file through `utils/process_test_conll.py`. This script takes a file, rather than a directory like the other script, and outputs a JSON file to feed into the prediction script.
