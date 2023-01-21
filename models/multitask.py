@@ -12,14 +12,31 @@ from typing import List, Union, Dict
 #############################################################################
 #                     Multitask model class definition                      #
 #############################################################################
+'''class MultitaskConfig(transformers.PretrainedConfig):
+    model_type = "MultitaskModel"
+
+    def __init__(
+        self,
+        taskmodels_dict: dict = None,
+        **kwargs,
+    ):
+        self.task_specific_params = {}
+        for task_name, model in taskmodels_dict.items():
+            self.task_specific_params[task_name] = model.config
+
+        super().__init__(**kwargs)
+'''
 
 class MultitaskModel(transformers.PreTrainedModel):
+    #config_class = MultitaskConfig
+
     def __init__(self, encoder, taskmodels_dict):
         """
         Setting MultitaskModel up as a PretrainedModel allows us
         to take better advantage of Trainer features
         """
         super().__init__(transformers.PretrainedConfig())
+        #super().__init__(MultitaskConfig(taskmodels_dict))
 
         self.encoder = encoder
         self.taskmodels_dict = nn.ModuleDict(taskmodels_dict)
@@ -248,3 +265,74 @@ class MultitaskTrainer(transformers.Trainer):
         task Dataloader
         """
         return self.get_single_eval_dataloader('ner', self.eval_dataset)
+
+#############################################################################
+#                         Tokenization functions                            #
+#############################################################################
+
+def align_labels_with_tokens(labels, word_ids, task_name):
+    # This function expects O to be 0 and all NER labels to follow in alternating B-I order
+    # For tokens inside a word but not at the beginning, we replace the B- with I- (since the token does not begin the entity)
+    new_labels = []
+    current_word = None
+    for word_id in word_ids:
+        if word_id != current_word:
+            # Start of a new word!
+            current_word = word_id
+            label = -100 if word_id is None else labels[word_id]
+            new_labels.append(label)
+        elif word_id is None:
+            # Special tokens get a label of -100
+            new_labels.append(-100)
+        else:
+            # Same word as previous token
+            label = labels[word_id]
+            if task_name == 'ner':
+                # If the label is B-XXX we change it to I-XXX
+                if label % 2 == 1:
+                    label += 1
+            new_labels.append(label)
+
+    return new_labels
+
+def convert_to_ner_features(examples, tokenizer):
+    tokenized_inputs = tokenizer(
+        examples['tokens'], truncation=True, is_split_into_words=True,
+        padding='max_length'
+    )
+    all_labels = examples['ner_tags_numeric']
+    new_labels = []
+    for i, labels in enumerate(all_labels):
+        word_ids = tokenized_inputs.word_ids(i)
+        new_labels.append(align_labels_with_tokens(labels, word_ids, 'ner'))
+
+    tokenized_inputs["labels"] = new_labels
+    return tokenized_inputs
+
+def convert_to_pos_features(examples, tokenizer):
+    tokenized_inputs = tokenizer(
+        examples['tokens'], truncation=True, is_split_into_words=True,
+        padding='max_length'
+    )
+    all_labels = examples['pos_tags_numeric']
+    new_labels = []
+    for i, labels in enumerate(all_labels):
+        word_ids = tokenized_inputs.word_ids(i)
+        new_labels.append(align_labels_with_tokens(labels, word_ids, 'pos'))
+
+    tokenized_inputs["labels"] = new_labels
+    return tokenized_inputs
+
+def convert_to_dep_features(examples, tokenizer):
+    tokenized_inputs = tokenizer(
+        examples['tokens'], truncation=True, is_split_into_words=True,
+        padding='max_length'
+    )
+    all_labels = examples['dep_tags_numeric']
+    new_labels = []
+    for i, labels in enumerate(all_labels):
+        word_ids = tokenized_inputs.word_ids(i)
+        new_labels.append(align_labels_with_tokens(labels, word_ids, 'dep'))
+
+    tokenized_inputs["labels"] = new_labels
+    return tokenized_inputs
