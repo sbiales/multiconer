@@ -10,6 +10,17 @@ from tqdm import tqdm
 from models import MULTI_LABEL2ID, MULTI_ID2LABEL, LANGCODES
 from models import MultitaskModel
 
+def clean_prediction(labels, word_ids):
+    new_labels = []
+    current_word = None
+    for i, word_id in enumerate(word_ids):
+        if word_id != current_word:
+            # Start of a new word! Keep the prediction
+            current_word = word_id
+            if word_id is not None:
+              new_labels.append(labels[i])
+    return new_labels
+
 def main(args):
     # Load the dataset file into a HuggingFace dataset
     test_dataset = load_dataset('json', data_files={
@@ -76,7 +87,8 @@ def main(args):
             padding='max_length',
             return_tensors='pt'
         )
-        out = multitask_model('ner', **model_inputs)
+        with torch.no_grad():
+            out = multitask_model('ner', **model_inputs)
         
         # Turn logits into probabilities
         probs = out['logits'].softmax(-1)
@@ -86,12 +98,8 @@ def main(args):
         pred = [[MULTI_ID2LABEL[int(p)] for p in prediction] for prediction in pred]
 
         # Clean off the predictions by only keeping the tokens representing beginnings of words
-        if model_name.startswith('xlm-roberta'):
-            for i, prediction in enumerate(pred):
-                predictions.append([p for p, t in zip(prediction, model_inputs.tokens(i)) if t.startswith('▁')])
-        else:
-            print('Please implement code to handle cleaning the predictions based on your model tokenizer')
-            predictions.extend(pred)
+        for i, prediction in enumerate(pred):
+            predictions.append(clean_prediction(prediction, model_inputs.word_ids(i)))
     #print(predictions)
 
     # Write to the predictions file
@@ -110,7 +118,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--lang', type=str, help='Which language to predict. If none provided, assume multi')
     parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default=join('predict', 'predictions'))
     parser.add_argument('-t', '--tasks', type=str, nargs = '*', choices=['D', 'P'], help='Which tasks the model was trained on (P for POS, D for dependency relations)')
-    parser.add_argument('-bs', '--batch_size', type=int, help='Prediction batch size.', default=16)
+    parser.add_argument('-bs', '--batch_size', type=int, help='Prediction batch size.', default=64)
 
     args = parser.parse_args()
 
