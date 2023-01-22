@@ -178,7 +178,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--model', type=str, help='The model checkpoint to use', default='xlm-roberta-base')
     parser.add_argument('-l', '--lang', type=str, help='Which language to train. If none provided, train on all')
     parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default='results')
-    parser.add_argument('-t', '--tasks', type=str, nargs = '*', choices=['D', 'P'], help='Which tasks to include (P for POS, D for dependency relations)')
+    parser.add_argument('--tasks', type=str, nargs = '*', choices=['D', 'P'], help='Which tasks to include (P for POS, D for dependency relations)')
 
     # Training arguments
     parser.add_argument('-bs', '--batch_size', type=int, help='Batch size.', default=8)
