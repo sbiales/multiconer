@@ -61,7 +61,7 @@ raw_datasets = load_dataset('json', data_files={
     },
     chunksize=40<<20,
     ignore_verifications=True)
-if lang:
+if lang is not 'multi':
     raw_datasets = raw_datasets.filter(lambda example: example["domain"] == lang)
 else:
     lang = 'multi'
@@ -155,6 +155,7 @@ def train(config=None):
             num_train_epochs=config.epochs,
             learning_rate=config.learning_rate,
             weight_decay=config.weight_decay,
+            warmup_ratio=config.warmup_ratio,
             per_device_train_batch_size=config.batch_size,
             per_device_eval_batch_size=config.batch_size,
             save_strategy='no',
