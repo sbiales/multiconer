@@ -15,10 +15,12 @@ from models import MultitaskModel, NLPDataCollator, MultitaskTrainer, convert_to
 #                            Conversion function                            #
 #############################################################################
 
-def convert(obj, classes):
+def convert(obj, classes, tasks):
   obj['ner_tags_numeric'] = [classes[t] for t in obj['ner_tags']]
-  obj['pos_tags_numeric'] = [classes[t] for t in obj['pos_tags']]
-  obj['dep_tags_numeric'] = [classes[t] for t in obj['dep_tags']]
+  if 'P' in tasks:
+    obj['pos_tags_numeric'] = [classes[t] for t in obj['pos_tags']]
+  if 'D' in tasks:
+    obj['dep_tags_numeric'] = [classes[t] for t in obj['dep_tags']]
   return obj
 
 
@@ -63,12 +65,12 @@ def main(args):
         lang = args.lang
     else:
         lang = 'multi'
-    raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': MULTI_LABEL2ID})
+    raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': MULTI_LABEL2ID, 'tasks': args.tasks})
 
     # Create the dictionaries based on which tasks are being predicted
     model_name = args.model
     dataset_dict = {
-        'ner': raw_datasets.remove_columns(['pos_tags', 'pos_tags_numeric', 'dep_tags', 'dep_tags_numeric']),
+        'ner': raw_datasets,
     }
     model_type_dict={
         'ner': transformers.AutoModelForTokenClassification
@@ -87,7 +89,7 @@ def main(args):
     }
 
     if 'P' in args.tasks:
-        dataset_dict['pos'] = raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric', 'dep_tags', 'dep_tags_numeric'])
+        dataset_dict['pos'] = raw_datasets
         model_type_dict['pos'] = transformers.AutoModelForTokenClassification
         model_config_dict['pos'] = transformers.AutoConfig.from_pretrained(model_name,
                 num_labels=len(MULTI_LABEL2ID.keys()),
@@ -97,7 +99,7 @@ def main(args):
         columns_dict['pos'] = ['input_ids', 'attention_mask', 'labels']
 
     if 'D' in args.tasks:
-        dataset_dict['dep'] = raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric', 'pos_tags', 'pos_tags_numeric'])
+        dataset_dict['dep'] = raw_datasets
         model_type_dict['dep'] = transformers.AutoModelForTokenClassification
         model_config_dict['dep'] = transformers.AutoConfig.from_pretrained(model_name,
                 num_labels=len(MULTI_LABEL2ID.keys()),
@@ -149,11 +151,12 @@ def main(args):
     trainer = MultitaskTrainer(
         model=multitask_model,
         args=transformers.TrainingArguments(
-            output_dir=join(args.out_dir, lang + '-multitask'),
+            output_dir=join(args.out_dir, f'{lang}-multitask-{"".join(args.tasks)}'),
             report_to='wandb',
             overwrite_output_dir=True,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
+            warmup_ratio=args.warmup_ratio,
             do_train=True,
             num_train_epochs=args.epochs,
             per_device_train_batch_size=args.batch_size,
@@ -177,7 +180,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dev', type=str, help='The path to the dev/validation json file', default=join('data', 'dev.json'))
     parser.add_argument('-m', '--model', type=str, help='The model checkpoint to use', default='xlm-roberta-base')
     parser.add_argument('-l', '--lang', type=str, help='Which language to train. If none provided, train on all')
-    parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default='results')
+    parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default='checkpoints')
     parser.add_argument('--tasks', type=str, nargs = '*', choices=['D', 'P'], help='Which tasks to include (P for POS, D for dependency relations)')
 
     # Training arguments
@@ -185,6 +188,7 @@ if __name__ == '__main__':
     parser.add_argument('-lr', '--learning_rate', type=float, help='Learning rate', default=2e-5)
     parser.add_argument('-ep', '--epochs', type=int, help='Number of epochs for training.', default=3)
     parser.add_argument('-wd', '--weight_decay', type=float, help='Weight decay', default=0.01)
+    parser.add_argument('-wr', '--warmup_ratio', type=float, help='Warmup ratio', default=0.0)
     #parser.add_argument('-do', '--dropout', type=float, help='Dropout rate', default=0.1)
 
     args = parser.parse_args()

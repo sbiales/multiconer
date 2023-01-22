@@ -30,7 +30,7 @@ MULTI_LABEL2ID = { 'O': 0, 'B-Station': 1, 'I-Station': 2, 'B-Facility': 3, 'I-F
   'advmod': 144, 'cop': 145, 'advcl:sp': 146, 'compound:ext': 147, 'det:predet': 148, 'dep': 149, 'expl:pass': 150, 'discourse:sp': 151, 'xcomp': 152, 'obj:agent': 153,
   'obl:mod': 154, 'fixed': 155, 'flat': 156, 'acl:relcl': 157, 'flat:repeat': 158, 'obl:tmod': 159, 'case': 160, 'nmod:npmod': 161, 'vocative': 162, 'appos': 163, 'acl': 164,
   'acl:adv': 165, 'acl:cleft': 166, 'reparandum': 167, 'obl:arg': 168, 'flat:abs': 169, 'iobj': 170, 'csubj': 171, 'orphan': 172, 'dep:comp': 173, 'expl:pv': 174,
-  'compound:lvc': 175, 'mark:rel': 176 }
+  'compound:lvc': 175, 'mark:rel': 176, 'compound:svc': 177 }
 
 MULTI_ID2LABEL = { i:c for c,i in MULTI_LABEL2ID.items() }
 

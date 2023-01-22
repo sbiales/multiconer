@@ -17,7 +17,8 @@ wandb.login()
 data_dir = join(os.getcwd(), 'data')
 
 # Set to None if training multilingual
-lang = os.getenv('LANG', 'de')
+lang = os.getenv('LANG', '')
+tasks = os.getenv('TASKS', ['P'])
 
 model_name = 'xlm-roberta-base'
 
@@ -25,10 +26,12 @@ model_name = 'xlm-roberta-base'
 #           Function Definitions            #
 #############################################
 
-def convert(obj, classes):
+def convert(obj, classes, tasks):
   obj['ner_tags_numeric'] = [classes[t] for t in obj['ner_tags']]
-  obj['pos_tags_numeric'] = [classes[t] for t in obj['pos_tags']]
-  obj['dep_tags_numeric'] = [classes[t] for t in obj['dep_tags']]
+  if 'P' in tasks:
+    obj['pos_tags_numeric'] = [classes[t] for t in obj['pos_tags']]
+  if 'D' in tasks:
+    obj['dep_tags_numeric'] = [classes[t] for t in obj['dep_tags']]
   return obj
 
 def compute_metrics(eval_preds):
@@ -55,61 +58,71 @@ def compute_metrics(eval_preds):
 #############################################
 
 # Load the train and dev dataset files into a HuggingFace dataset
+print('Language:', lang)
+print('Tasks:', tasks)
 raw_datasets = load_dataset('json', data_files={
     'train': join(data_dir, "train.json"), 
     'validation': join(data_dir, "dev.json")
     },
     chunksize=40<<20,
     ignore_verifications=True)
-if lang is not 'multi':
+if lang:
     raw_datasets = raw_datasets.filter(lambda example: example["domain"] == lang)
 else:
     lang = 'multi'
-raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': MULTI_LABEL2ID})
+    # This needs to be changed but right now can't train on 'bn' due to no UD tags
+    if 'D' in tasks:
+        raw_datasets = raw_datasets.filter(lambda example: example["domain"] != 'bn')
+raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': MULTI_LABEL2ID, 'tasks': tasks})
 
 dataset_dict = {
-    'ner': raw_datasets.remove_columns(['pos_tags', 'pos_tags_numeric', 'dep_tags', 'dep_tags_numeric']),
-    'pos': raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric', 'dep_tags', 'dep_tags_numeric']),
-    'dep': raw_datasets.remove_columns(['ner_tags', 'ner_tags_numeric', 'pos_tags', 'pos_tags_numeric']),
+    'ner': raw_datasets,
 }
+model_type_dict={
+    'ner': transformers.AutoModelForTokenClassification
+}
+model_config_dict={
+    'ner': transformers.AutoConfig.from_pretrained(model_name,
+            num_labels=len(MULTI_LABEL2ID.keys()),
+            id2label=MULTI_ID2LABEL,
+            label2id=MULTI_LABEL2ID)
+}
+convert_func_dict = {
+    'ner': convert_to_ner_features
+}
+columns_dict = {
+    'ner': ['input_ids', 'attention_mask', 'labels']
+}
+
+if 'P' in tasks:
+    dataset_dict['pos'] = raw_datasets
+    model_type_dict['pos'] = transformers.AutoModelForTokenClassification
+    model_config_dict['pos'] = transformers.AutoConfig.from_pretrained(model_name,
+            num_labels=len(MULTI_LABEL2ID.keys()),
+            id2label=MULTI_ID2LABEL,
+            label2id=MULTI_LABEL2ID)
+    convert_func_dict['pos'] = convert_to_pos_features
+    columns_dict['pos'] = ['input_ids', 'attention_mask', 'labels']
+
+if 'D' in tasks:
+    dataset_dict['dep'] = raw_datasets
+    model_type_dict['dep'] = transformers.AutoModelForTokenClassification
+    model_config_dict['dep'] = transformers.AutoConfig.from_pretrained(model_name,
+            num_labels=len(MULTI_LABEL2ID.keys()),
+            id2label=MULTI_ID2LABEL,
+            label2id=MULTI_LABEL2ID)
+    convert_func_dict['dep'] = convert_to_dep_features
+    columns_dict['dep'] = ['input_ids', 'attention_mask', 'labels']
 
 # create the corresponding task models by supplying the invidual model classes and model configs
 multitask_model = MultitaskModel.create(
-    model_name=model_name,
-    model_type_dict={
-        'ner': transformers.AutoModelForTokenClassification,
-        'pos': transformers.AutoModelForTokenClassification,
-        "dep": transformers.AutoModelForTokenClassification,
-    },
-    model_config_dict={
-        'ner': transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID),
-        'pos': transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID),
-        'dep': transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID),
-    },
-)
+        model_name=model_name,
+        model_type_dict=model_type_dict,
+        model_config_dict=model_config_dict,
+    )
 
 #  convert from raw text to tokenized text inputs
 tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-convert_func_dict = {
-    'ner': convert_to_ner_features,
-    'pos': convert_to_pos_features,
-    'dep': convert_to_dep_features,
-}
-
-columns_dict = {
-    'ner': ['input_ids', 'attention_mask', 'labels'],
-    'pos': ['input_ids', 'attention_mask', 'labels'],
-    'dep': ['input_ids', 'attention_mask', 'labels'],
-}
 
 features_dict = {}
 for task_name, dataset in dataset_dict.items():
@@ -140,7 +153,7 @@ eval_dataset = {
 def train(config=None):
   #gc.collect()
   #torch.cuda.empty_cache()
-  with wandb.init(config=config, name=f'{lang}_multitask'):
+  with wandb.init(config=config, name=f'{lang}_multitask{"".join(tasks)}'):
     # set sweep configuration
     config = wandb.config
 
@@ -159,7 +172,8 @@ def train(config=None):
             per_device_train_batch_size=config.batch_size,
             per_device_eval_batch_size=config.batch_size,
             save_strategy='no',
-            evaluation_strategy='epoch'
+            evaluation_strategy='steps',
+            eval_steps=3000
         ),
         data_collator=NLPDataCollator(),
         train_dataset=train_dataset,
