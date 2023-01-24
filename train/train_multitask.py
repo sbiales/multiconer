@@ -109,7 +109,7 @@ def main(args):
         columns_dict['dep'] = ['input_ids', 'attention_mask', 'labels']
 
     # Initialize wandb
-    wandb.init(project='thesis', config=args)
+    wandb.init(project='thesis', entity='sbiales', config=args)
 
     # create the corresponding task models by supplying the invidual model classes and model configs
     
@@ -163,7 +163,8 @@ def main(args):
             per_device_eval_batch_size=args.batch_size,
             save_strategy='epoch',
             save_total_limit=3,
-            evaluation_strategy='epoch'
+            evaluation_strategy='steps',
+            eval_steps=3000
         ),
         data_collator=NLPDataCollator(),
         train_dataset=train_dataset,
