@@ -18,7 +18,7 @@ data_dir = join(os.getcwd(), 'data')
 
 # Set to None if training multilingual
 lang = os.getenv('LANG', '')
-tasks = os.getenv('TASKS', ['P'])
+tasks = os.getenv('TASKS', 'P')
 
 model_name = 'xlm-roberta-base'
 
@@ -153,9 +153,15 @@ eval_dataset = {
 def train(config=None):
   #gc.collect()
   #torch.cuda.empty_cache()
-  with wandb.init(config=config, name=f'{lang}_multitask{"".join(tasks)}'):
+  with wandb.init(config=config, name=f'{lang}_multitask{tasks}'):
     # set sweep configuration
     config = wandb.config
+
+    # Create and set seed to make model reproducible
+    seed = int(np.random.rand() * (2**32 - 1))
+    print('Seed:', seed)
+    transformers.trainer_utils.set_seed(seed)
+    wandb.log({'seed': seed})
 
     # define training loop    
     trainer = MultitaskTrainer(
