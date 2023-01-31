@@ -16,9 +16,14 @@ def clean_prediction(labels, word_ids):
     for i, word_id in enumerate(word_ids):
         if word_id != current_word:
             # Start of a new word! Keep the prediction
-            current_word = word_id
             if word_id is not None:
+              # Check if we skipped a word and fill in with O
+              if current_word is not None and word_id - current_word > 1:
+                diff = word_id - current_word - 1
+                new_labels.extend(['O']*diff)
+              # Add the new prediction label
               new_labels.append(labels[i])
+            current_word = word_id
     return new_labels
 
 def main(args):
