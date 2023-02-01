@@ -27,6 +27,9 @@ def clean_prediction(labels, word_ids):
     return new_labels
 
 def main(args):
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print('Running the code on', device)
+
     # Load the dataset file into a HuggingFace dataset
     test_dataset = load_dataset('json', data_files={
     'validation': args.dataset
@@ -81,6 +84,10 @@ def main(args):
     state_dict = torch.load(join(checkpoint, 'pytorch_model.bin'))
     multitask_model.load_state_dict(state_dict)
 
+    print('Moving the model to', device)
+    multitask_model.to(device)
+
+
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
 
     # Prediction
@@ -91,7 +98,7 @@ def main(args):
             batch_text, truncation=True, is_split_into_words=True,
             padding='max_length',
             return_tensors='pt'
-        )
+        ).to(device)
         with torch.no_grad():
             out = multitask_model('ner', **model_inputs)
         
