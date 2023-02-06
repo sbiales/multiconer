@@ -1,6 +1,7 @@
 import argparse
 from datasets import load_dataset
 from transformers import AutoTokenizer, DataCollatorForTokenClassification, AutoModelForTokenClassification, TrainingArguments, Trainer
+import transformers
 import evaluate
 import numpy as np
 import wandb
@@ -38,6 +39,14 @@ def main(args):
 
     # Initialize wandb
     wandb.init(project="thesis", config=args)
+
+    if(args.seed):
+        seed = args.seed
+    else:
+        seed = int(np.random.rand() * (2**32 - 1))
+    print('Seed:', seed)
+    transformers.trainer_utils.set_seed(seed)
+    wandb.log({'seed': seed})
 
     training_args = TrainingArguments(
         "base-finetuned-ner",
@@ -131,6 +140,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dev', type=str, help='The path to the dev/validation json file', default='.\\data\\dev.json')
     parser.add_argument('-m', '--model', type=str, help='The model checkpoint to use', default='xlm-roberta-base')
     parser.add_argument('-l', '--lang', type=str, help='Which language to train. If none provided, train on all')
+    parser.add_argument('-s', '--seed', type=int, help='Seed for the model')
 
     # Training arguments
     parser.add_argument('-bs', '--batch_size', type=int, help='Batch size.', default=16)
