@@ -1,5 +1,6 @@
 from datasets import load_dataset
 from transformers import AutoTokenizer, DataCollatorForTokenClassification, AutoModelForTokenClassification, TrainingArguments, Trainer
+import transformers
 import evaluate
 import numpy as np
 import wandb
@@ -121,6 +122,12 @@ def train(config=None):
   with wandb.init(config=config, entity='sbiales', name=f'{lang}-base'):
     # set sweep configuration
     config = wandb.config
+
+    # Create and set seed to make model reproducible
+    seed = int(np.random.rand() * (2**32 - 1))
+    print('Seed:', seed)
+    transformers.trainer_utils.set_seed(seed)
+    wandb.log({'seed': seed})
 
     # set training arguments
     training_args = TrainingArguments(
