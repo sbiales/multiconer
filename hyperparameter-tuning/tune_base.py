@@ -13,7 +13,7 @@ wandb.login()
 data_dir = join(os.getcwd(), 'data')
 
 # Set to None if training multilingual
-lang = 'de'
+lang = os.getenv('LANG', '')
 
 model_name = 'xlm-roberta-base'
 
@@ -102,6 +102,8 @@ raw_datasets = load_dataset('json', data_files={
     ignore_verifications=True)
 if lang:
     raw_datasets = raw_datasets.filter(lambda example: example["domain"] == lang)
+else:
+    lang = 'multi'
 
 raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': NER_LABEL2ID})
 
@@ -116,23 +118,24 @@ tokenized_datasets = raw_datasets.map(
 data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
 
 def train(config=None):
-  with wandb.init(config=config, name=f'{lang}_base'):
+  with wandb.init(config=config, entity='sbiales', name=f'{lang}-base'):
     # set sweep configuration
     config = wandb.config
-
 
     # set training arguments
     training_args = TrainingArguments(
         output_dir=join('hyperparameter-tuning', 'sweeps', f'{lang}-base-sweeps'),
 	    report_to='wandb',  # Turn on Weights & Biases logging
+        do_train=True,
         num_train_epochs=config.epochs,
         learning_rate=config.learning_rate,
         weight_decay=config.weight_decay,
         per_device_train_batch_size=config.batch_size,
-        per_device_eval_batch_size=16,
+        per_device_eval_batch_size=config.batch_size,
         save_strategy='no',
-        evaluation_strategy='epoch',
-        logging_strategy='epoch',
+        evaluation_strategy='steps',
+        logging_strategy='steps',
+        eval_steps=3000,
         remove_unused_columns=False
     )
 

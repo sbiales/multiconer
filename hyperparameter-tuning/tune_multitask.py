@@ -153,7 +153,7 @@ eval_dataset = {
 def train(config=None):
   #gc.collect()
   #torch.cuda.empty_cache()
-  with wandb.init(config=config, name=f'{lang}_multitask{tasks}'):
+  with wandb.init(config=config, entity='sbiales', name=f'{lang}_multitask{tasks}'):
     # set sweep configuration
     config = wandb.config
 
