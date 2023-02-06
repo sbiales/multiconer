@@ -12,7 +12,10 @@ from os.path import join
 
 def main(args):
     dataset = read_conllu(args.file)
-    domain = dataset[0]['domain']
+    if args.domain:
+        domain = args.domain
+    else:
+        domain = dataset[0]['domain']
 
     ds_json = json.dumps(dataset, ensure_ascii=False)
 
@@ -62,6 +65,9 @@ def read_conllu(filename):
                 obj['id'] = row.split()[2]
                 obj['domain'] = row.split()[3].split('=')[1]
 
+            elif row[0] == '#':
+                obj['id'] = row.split()[2]
+
             # If it is not a comment, add words to sentence
             else:
                 sentence.append(row.split()[0])
@@ -77,6 +83,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--out_path', type=str,
         help='The path to the directory in which to save the json file',
         default=join('.', 'data'))
+    parser.add_argument('-d', '--domain', type=str, help='The domain of the file (for the filename to be generated)')
 
     args = parser.parse_args()
 
