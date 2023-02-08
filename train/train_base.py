@@ -55,6 +55,7 @@ def main(args):
         learning_rate=args.learning_rate,
         num_train_epochs=args.epochs,
         weight_decay=args.weight_decay,
+        warmup_ratio=args.warmup_ratio,
         push_to_hub=False,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -147,6 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('-lr', '--learning_rate', type=float, help='Learning rate', default=2e-5)
     parser.add_argument('-ep', '--epochs', type=int, help='Number of epochs for training.', default=3)
     parser.add_argument('-wd', '--weight_decay', type=float, help='Weight decay', default=0.01)
+    parser.add_argument('-wr', '--warmup_ratio', type=float, help='Warmup ratio', default=0.0)
     #parser.add_argument('-do', '--dropout', type=float, help='Dropout rate', default=0.1)
 
     args = parser.parse_args()

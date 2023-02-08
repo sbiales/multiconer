@@ -137,12 +137,12 @@ def train(config=None):
         num_train_epochs=config.epochs,
         learning_rate=config.learning_rate,
         weight_decay=config.weight_decay,
+        warmup_ratio=config.warmup_ratio,
         per_device_train_batch_size=config.batch_size,
         per_device_eval_batch_size=config.batch_size,
         save_strategy='no',
-        evaluation_strategy='steps',
-        logging_strategy='steps',
-        eval_steps=3000,
+        evaluation_strategy='epoch',
+        logging_strategy='epoch',
         remove_unused_columns=False
     )
 
