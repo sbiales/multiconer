@@ -7,7 +7,7 @@ from os.path import join
 
 import evaluate
 
-from models import MULTI_LABEL2ID, MULTI_ID2LABEL, LANGCODES
+from models import NER_LABEL2ID, NER_ID2LABEL, POS_LABEL2ID, POS_ID2LABEL, DEP_LABEL2ID, DEP_ID2LABEL, LANGCODES
 from models import MultitaskModel, NLPDataCollator, MultitaskTrainer, convert_to_ner_features, convert_to_pos_features, convert_to_dep_features
 
 
@@ -16,11 +16,11 @@ from models import MultitaskModel, NLPDataCollator, MultitaskTrainer, convert_to
 #############################################################################
 
 def convert(obj, classes, tasks):
-  obj['ner_tags_numeric'] = [classes[t] for t in obj['ner_tags']]
+  obj['ner_tags_numeric'] = [classes['ner'][t] for t in obj['ner_tags']]
   if 'P' in tasks:
-    obj['pos_tags_numeric'] = [classes[t] for t in obj['pos_tags']]
+    obj['pos_tags_numeric'] = [classes['pos'][t] for t in obj['pos_tags']]
   if 'D' in tasks:
-    obj['dep_tags_numeric'] = [classes[t] for t in obj['dep_tags']]
+    obj['dep_tags_numeric'] = [classes['dep'][t] for t in obj['dep_tags']]
   return obj
 
 
@@ -34,9 +34,9 @@ def compute_metrics(eval_preds):
     predictions = np.argmax(logits, axis=-1)
 
     # Remove ignored index (special tokens) and convert to labels
-    true_labels = [[MULTI_ID2LABEL[l] for l in label if l != -100] for label in labels]
+    true_labels = [[NER_ID2LABEL[l] for l in label if l != -100] for label in labels]
     true_predictions = [
-        [MULTI_ID2LABEL[p] for (p, l) in zip(prediction, label) if l != -100]
+        [NER_ID2LABEL[p] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
     all_metrics = metric.compute(predictions=true_predictions, references=true_labels)
@@ -65,7 +65,10 @@ def main(args):
         lang = args.lang
     else:
         lang = 'multi'
-    raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': MULTI_LABEL2ID, 'tasks': args.tasks})
+        if 'D' in args.tasks:
+            raw_datasets = raw_datasets.filter(lambda example: example["domain"] != 'bn')
+    classes = { 'ner': NER_LABEL2ID, 'pos': POS_LABEL2ID, 'dep': DEP_LABEL2ID }
+    raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': classes, 'tasks': args.tasks})
 
     # Create the dictionaries based on which tasks are being predicted
     model_name = args.model
@@ -77,9 +80,9 @@ def main(args):
     }
     model_config_dict={
         'ner': transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID)
+                num_labels=len(NER_LABEL2ID.keys()),
+                id2label=NER_ID2LABEL,
+                label2id=NER_LABEL2ID)
     }
     convert_func_dict = {
         'ner': convert_to_ner_features
@@ -92,9 +95,9 @@ def main(args):
         dataset_dict['pos'] = raw_datasets
         model_type_dict['pos'] = transformers.AutoModelForTokenClassification
         model_config_dict['pos'] = transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID)
+                num_labels=len(POS_LABEL2ID.keys()),
+                id2label=POS_ID2LABEL,
+                label2id=POS_LABEL2ID)
         convert_func_dict['pos'] = convert_to_pos_features
         columns_dict['pos'] = ['input_ids', 'attention_mask', 'labels']
 
@@ -102,9 +105,9 @@ def main(args):
         dataset_dict['dep'] = raw_datasets
         model_type_dict['dep'] = transformers.AutoModelForTokenClassification
         model_config_dict['dep'] = transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID)
+                num_labels=len(DEP_LABEL2ID.keys()),
+                id2label=DEP_ID2LABEL,
+                label2id=DEP_LABEL2ID)
         convert_func_dict['dep'] = convert_to_dep_features
         columns_dict['dep'] = ['input_ids', 'attention_mask', 'labels']
 
@@ -116,8 +119,12 @@ def main(args):
     else:
         seed = int(np.random.rand() * (2**32 - 1))
     print('Seed:', seed)
+    print('Tasks:', args.tasks)
     transformers.trainer_utils.set_seed(seed)
-    wandb.log({'seed': seed})
+    wandb.log({
+        'seed': seed,
+        'tasks': args.tasks
+    })
 
     # create the corresponding task models by supplying the invidual model classes and model configs
     

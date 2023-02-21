@@ -110,8 +110,18 @@ def main(args):
         pred = [[MULTI_ID2LABEL[int(p)] for p in prediction] for prediction in pred]
 
         # Clean off the predictions by only keeping the tokens representing beginnings of words
+        # Additionally, postprocess any instances where I- occurs without following a B-
+        prev = None
+        fixed = []
         for i, prediction in enumerate(pred):
-            predictions.append(clean_prediction(prediction, model_inputs.word_ids(i)))
+            cleaned = clean_prediction(prediction, model_inputs.word_ids(i))
+            for tok in cleaned:
+                if tok.startswith('I') and prev == 'O':
+                    tok = 'B' + tok[1:]
+                prev = tok
+                fixed.append(tok)
+            predictions.append(cleaned)
+            fixed = []
     #print(predictions)
 
     # Write to the predictions file
