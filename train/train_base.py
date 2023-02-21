@@ -5,6 +5,7 @@ import transformers
 import evaluate
 import numpy as np
 import wandb
+from os.path import join
 
 from models import LANGCODES, NER_LABEL2ID, NER_ID2LABEL
 
@@ -18,6 +19,9 @@ def main(args):
     ignore_verifications=True)
     if args.lang:
         raw_datasets = raw_datasets.filter(lambda example: example["domain"] == args.lang)
+        lang = args.lang
+    else:
+        lang = 'multi'
     raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': NER_LABEL2ID})
 
     # Tokenize the datasets and align labels
@@ -38,7 +42,7 @@ def main(args):
     )
 
     # Initialize wandb
-    wandb.init(project="thesis", config=args)
+    wandb.init(project="thesis", entity="sbiales", config=args)
 
     if(args.seed):
         seed = args.seed
@@ -49,9 +53,10 @@ def main(args):
     wandb.log({'seed': seed})
 
     training_args = TrainingArguments(
-        "base-finetuned-ner",
+        output_dir=join(args.out_dir, f'{lang}-base'),
         evaluation_strategy="epoch",
         save_strategy="epoch",
+        save_total_limit=3,
         learning_rate=args.learning_rate,
         num_train_epochs=args.epochs,
         weight_decay=args.weight_decay,
@@ -137,10 +142,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Data arguments
-    parser.add_argument('-t', '--train', type=str, help='The path to the training json file', default='.\\data\\train.json')
-    parser.add_argument('-d', '--dev', type=str, help='The path to the dev/validation json file', default='.\\data\\dev.json')
+    parser.add_argument('-t', '--train', type=str, help='The path to the training json file', default=join('data', 'train.json'))
+    parser.add_argument('-d', '--dev', type=str, help='The path to the dev/validation json file', default=join('data', 'dev.json'))
     parser.add_argument('-m', '--model', type=str, help='The model checkpoint to use', default='xlm-roberta-base')
     parser.add_argument('-l', '--lang', type=str, help='Which language to train. If none provided, train on all')
+    parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default='checkpoints')
     parser.add_argument('-s', '--seed', type=int, help='Seed for the model')
 
     # Training arguments
