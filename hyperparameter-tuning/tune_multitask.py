@@ -4,7 +4,6 @@ from datasets import load_dataset
 import wandb
 from os.path import join
 import os
-import gc
 import torch
 
 import evaluate
@@ -76,6 +75,21 @@ else:
 classes = { 'ner': NER_LABEL2ID, 'pos': POS_LABEL2ID, 'dep': DEP_LABEL2ID }
 raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': classes, 'tasks': tasks})
 
+# Create and set seed to make model reproducible
+seed = int(np.random.rand() * (2**32 - 1))
+print('Seed:', seed)
+transformers.trainer_utils.set_seed(seed)
+# Enable PyTorch deterministic mode. This potentially requires either the environment
+# variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
+# depending on the CUDA version, so we set them both here
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+torch.use_deterministic_algorithms(True)
+
+# Enable CUDNN deterministic mode
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 dataset_dict = {
     'ner': raw_datasets,
 }
@@ -114,11 +128,6 @@ if 'D' in tasks:
             label2id=DEP_LABEL2ID)
     convert_func_dict['dep'] = convert_to_dep_features
     columns_dict['dep'] = ['input_ids', 'attention_mask', 'labels']
-
-# Create and set seed to make model reproducible
-seed = int(np.random.rand() * (2**32 - 1))
-print('Seed:', seed)
-transformers.trainer_utils.set_seed(seed)
 
 # create the corresponding task models by supplying the invidual model classes and model configs
 multitask_model = MultitaskModel.create(

@@ -4,6 +4,8 @@ from datasets import load_dataset
 import argparse
 import wandb
 from os.path import join
+import os
+import torch
 
 import evaluate
 
@@ -70,6 +72,32 @@ def main(args):
     classes = { 'ner': NER_LABEL2ID, 'pos': POS_LABEL2ID, 'dep': DEP_LABEL2ID }
     raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': classes, 'tasks': args.tasks})
 
+    # Initialize wandb
+    wandb.init(project='thesis', entity='sbiales', config=args)
+
+    # Set seed and make model deterministic
+    if(args.seed):
+        seed = args.seed
+    else:
+        seed = int(np.random.rand() * (2**32 - 1))
+    print('Seed:', seed)
+    print('Tasks:', args.tasks)
+    transformers.trainer_utils.set_seed(seed)
+    # Enable PyTorch deterministic mode. This potentially requires either the environment
+    # variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
+    # depending on the CUDA version, so we set them both here
+    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+    torch.use_deterministic_algorithms(True)
+
+    # Enable CUDNN deterministic mode
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    wandb.log({
+        'seed': seed,
+        'tasks': args.tasks
+    })
+
     # Create the dictionaries based on which tasks are being predicted
     model_name = args.model
     dataset_dict = {
@@ -111,21 +139,6 @@ def main(args):
         convert_func_dict['dep'] = convert_to_dep_features
         columns_dict['dep'] = ['input_ids', 'attention_mask', 'labels']
 
-    # Initialize wandb
-    wandb.init(project='thesis', entity='sbiales', config=args)
-
-    if(args.seed):
-        seed = args.seed
-    else:
-        seed = int(np.random.rand() * (2**32 - 1))
-    print('Seed:', seed)
-    print('Tasks:', args.tasks)
-    transformers.trainer_utils.set_seed(seed)
-    wandb.log({
-        'seed': seed,
-        'tasks': args.tasks
-    })
-
     # create the corresponding task models by supplying the invidual model classes and model configs
     
     multitask_model = MultitaskModel.create(
@@ -133,6 +146,8 @@ def main(args):
         model_type_dict=model_type_dict,
         model_config_dict=model_config_dict,
     )
+
+    transformers.trainer_utils.set_seed(seed)
 
     #  convert from raw text to tokenized text inputs
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)

@@ -6,6 +6,7 @@ import numpy as np
 import wandb
 import os
 from os.path import join
+import torch
 
 from models import NER_LABEL2ID, NER_ID2LABEL
 
@@ -18,6 +19,19 @@ lang = os.getenv('LANG', '')
 
 model_name = 'xlm-roberta-base'
 
+# Create seed and make model deterministic
+seed = int(np.random.rand() * (2**32 - 1))
+transformers.trainer_utils.set_seed(seed)
+# Enable PyTorch deterministic mode. This potentially requires either the environment
+# variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
+# depending on the CUDA version, so we set them both here
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+torch.use_deterministic_algorithms(True)
+
+# Enable CUDNN deterministic mode
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 #############################################
 #           Function Definitions            #
@@ -123,10 +137,8 @@ def train(config=None):
     # set sweep configuration
     config = wandb.config
 
-    # Create and set seed to make model reproducible
-    seed = int(np.random.rand() * (2**32 - 1))
+    # Set seed to make model reproducible
     print('Seed:', seed)
-    transformers.trainer_utils.set_seed(seed)
     wandb.log({'seed': seed})
 
     # set training arguments

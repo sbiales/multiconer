@@ -6,6 +6,8 @@ import evaluate
 import numpy as np
 import wandb
 from os.path import join
+import os
+import torch
 
 from models import LANGCODES, NER_LABEL2ID, NER_ID2LABEL
 
@@ -24,6 +26,28 @@ def main(args):
         lang = 'multi'
     raw_datasets = raw_datasets.map(convert, fn_kwargs={'classes': NER_LABEL2ID})
 
+    # Initialize wandb
+    wandb.init(project="thesis", entity="sbiales", config=args)
+
+    if(args.seed):
+        seed = args.seed
+    else:
+        seed = int(np.random.rand() * (2**32 - 1))
+    print('Seed:', seed)
+    transformers.trainer_utils.set_seed(seed)
+    # Enable PyTorch deterministic mode. This potentially requires either the environment
+    # variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
+    # depending on the CUDA version, so we set them both here
+    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+    torch.use_deterministic_algorithms(True)
+
+    # Enable CUDNN deterministic mode
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    wandb.log({'seed': seed})
+
     # Tokenize the datasets and align labels
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     tokenized_datasets = raw_datasets.map(
@@ -40,17 +64,6 @@ def main(args):
         id2label=NER_ID2LABEL,
         label2id=NER_LABEL2ID,
     )
-
-    # Initialize wandb
-    wandb.init(project="thesis", entity="sbiales", config=args)
-
-    if(args.seed):
-        seed = args.seed
-    else:
-        seed = int(np.random.rand() * (2**32 - 1))
-    print('Seed:', seed)
-    transformers.trainer_utils.set_seed(seed)
-    wandb.log({'seed': seed})
 
     training_args = TrainingArguments(
         output_dir=join(args.out_dir, f'{lang}-base'),
