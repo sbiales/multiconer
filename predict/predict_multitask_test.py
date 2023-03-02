@@ -1,13 +1,13 @@
 import transformers
 from datasets import load_dataset
 import argparse
-from os.path import join
+from os import path
 import torch
 import pydash
 from tqdm import tqdm
 
 
-from models import MULTI_LABEL2ID, MULTI_ID2LABEL, LANGCODES
+from models import NER_LABEL2ID, NER_ID2LABEL, POS_LABEL2ID, POS_ID2LABEL, DEP_LABEL2ID, DEP_ID2LABEL, LANGCODES
 from models import MultitaskModel
 
 def clean_prediction(labels, word_ids):
@@ -50,24 +50,24 @@ def main(args):
     }
     model_config_dict={
         'ner': transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID)
+                num_labels=len(NER_LABEL2ID.keys()),
+                id2label=NER_ID2LABEL,
+                label2id=NER_LABEL2ID)
     }
 
     if 'P' in args.tasks:
         model_type_dict['pos'] = transformers.AutoModelForTokenClassification
         model_config_dict['pos'] = transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID)
+                num_labels=len(POS_LABEL2ID.keys()),
+                id2label=POS_ID2LABEL,
+                label2id=POS_LABEL2ID)
 
     if 'D' in args.tasks:
         model_type_dict['dep'] = transformers.AutoModelForTokenClassification
         model_config_dict['dep'] = transformers.AutoConfig.from_pretrained(model_name,
-                num_labels=len(MULTI_LABEL2ID.keys()),
-                id2label=MULTI_ID2LABEL,
-                label2id=MULTI_LABEL2ID)
+                num_labels=len(DEP_LABEL2ID.keys()),
+                id2label=DEP_ID2LABEL,
+                label2id=DEP_LABEL2ID)
 
     # Initialize wandb
     #wandb.init(project='thesis', config=args)
@@ -81,7 +81,7 @@ def main(args):
         model_config_dict=model_config_dict
     )
 
-    state_dict = torch.load(join(checkpoint, 'pytorch_model.bin'))
+    state_dict = torch.load(path.join(checkpoint, 'pytorch_model.bin'))
     multitask_model.load_state_dict(state_dict)
 
     print('Moving the model to', device)
@@ -107,25 +107,25 @@ def main(args):
         # Get the best fit predicted labels
         pred = probs.argmax(-1)
         # Map IDs to the actual class labels
-        pred = [[MULTI_ID2LABEL[int(p)] for p in prediction] for prediction in pred]
+        pred = [[NER_ID2LABEL[int(p)] for p in prediction] for prediction in pred]
 
         # Clean off the predictions by only keeping the tokens representing beginnings of words
-        # Additionally, postprocess any instances where I- occurs without following a B-
+        '''# Additionally, postprocess any instances where I- occurs without following a B-
         prev = None
-        fixed = []
+        fixed = []'''
         for i, prediction in enumerate(pred):
-            cleaned = clean_prediction(prediction, model_inputs.word_ids(i))
+            predictions.append(clean_prediction(prediction, model_inputs.word_ids(i)))
+            '''cleaned = clean_prediction(prediction, model_inputs.word_ids(i))
             for tok in cleaned:
                 if tok.startswith('I') and prev == 'O':
                     tok = 'B' + tok[1:]
                 prev = tok
                 fixed.append(tok)
             predictions.append(cleaned)
-            fixed = []
-    #print(predictions)
+            fixed = []'''
 
     # Write to the predictions file
-    with open(join(args.out_dir, f'{lang}.pred.conll'), 'w', encoding='utf-8') as predfile:
+    with open(path.join(args.out_dir, ''.join(args.tasks), f'{lang}.pred.conll'), 'w', encoding='utf-8') as predfile:
         for prediction in predictions:
             predfile.write('\n'.join(prediction))
             predfile.write('\n\n')
@@ -134,11 +134,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Data arguments
-    parser.add_argument('-d', '--dataset', type=str, help='The path to the json file to predict for', default=join('data', 'dev.json'))
+    parser.add_argument('-d', '--dataset', type=str, help='The path to the json file to predict for', default=path.join('data', 'dev.json'))
     parser.add_argument('-m', '--model', type=str, help='The pretrained model to use', default='xlm-roberta-base')
     parser.add_argument('-c', '--checkpoint', type=str, help='The model checkpoint to use')
     parser.add_argument('-l', '--lang', type=str, help='Which language to predict. If none provided, assume multi')
-    parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default=join('predict', 'predictions'))
+    parser.add_argument('-o', '--out_dir', type=str, help='The path to put the output files', default=path.join('predict', 'predictions'))
     parser.add_argument('-t', '--tasks', type=str, nargs = '*', choices=['D', 'P'], help='Which tasks the model was trained on (P for POS, D for dependency relations)')
     parser.add_argument('-bs', '--batch_size', type=int, help='Prediction batch size.', default=64)
 
