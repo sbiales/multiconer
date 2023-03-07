@@ -4,8 +4,6 @@ from datasets import load_dataset
 import argparse
 import wandb
 from os.path import join
-import os
-import torch
 
 import evaluate
 
@@ -82,17 +80,7 @@ def main(args):
         seed = int(np.random.rand() * (2**32 - 1))
     print('Seed:', seed)
     print('Tasks:', args.tasks)
-    transformers.trainer_utils.set_seed(seed)
-    # Enable PyTorch deterministic mode. This potentially requires either the environment
-    # variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
-    # depending on the CUDA version, so we set them both here
-    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-    torch.use_deterministic_algorithms(True)
-
-    # Enable CUDNN deterministic mode
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    transformers.trainer_utils.enable_full_determinism(seed)
     wandb.log({
         'seed': seed,
         'tasks': args.tasks
@@ -140,14 +128,19 @@ def main(args):
         columns_dict['dep'] = ['input_ids', 'attention_mask', 'labels']
 
     # create the corresponding task models by supplying the invidual model classes and model configs
-    
+    def model_init():
+        model = MultitaskModel.create(
+            model_name=model_name,
+            model_type_dict=model_type_dict,
+            model_config_dict=model_config_dict,
+        )
+        return model
+
     multitask_model = MultitaskModel.create(
         model_name=model_name,
         model_type_dict=model_type_dict,
         model_config_dict=model_config_dict,
     )
-
-    transformers.trainer_utils.set_seed(seed)
 
     #  convert from raw text to tokenized text inputs
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
@@ -173,13 +166,11 @@ def main(args):
         task_name: dataset['train'] 
         for task_name, dataset in features_dict.items()
     }
-    eval_dataset = {
-        task_name: dataset['validation'] 
-        for task_name, dataset in features_dict.items()
-    }
+    eval_dataset = features_dict['ner']['validation']
 
     trainer = MultitaskTrainer(
-        model=multitask_model,
+        #model=multitask_model,
+        model_init=model_init,
         args=transformers.TrainingArguments(
             output_dir=join(args.out_dir, f'{lang}-multitask-{"".join(args.tasks)}'),
             report_to='wandb',
@@ -190,15 +181,17 @@ def main(args):
             do_train=True,
             num_train_epochs=args.epochs,
             per_device_train_batch_size=args.batch_size,
-            per_device_eval_batch_size=args.batch_size,
+            per_device_eval_batch_size=16,
             save_strategy='epoch',
             save_total_limit=3,
             evaluation_strategy='steps',
-            eval_steps=3000
+            eval_steps=2000,
+            full_determinism=True,
+            label_names=['labels']
         ),
         data_collator=NLPDataCollator(),
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset['ner'],
+        eval_dataset=eval_dataset,
         compute_metrics=compute_metrics
     )
     trainer.train()

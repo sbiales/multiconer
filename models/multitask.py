@@ -7,6 +7,7 @@ from torch.utils.data.dataloader import DataLoader
 from transformers.data.data_collator import DataCollator, InputDataClass
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler
+from transformers.trainer_utils import seed_worker
 from typing import List, Union, Dict
 
 #############################################################################
@@ -217,6 +218,7 @@ class MultitaskTrainer(transformers.Trainer):
                 batch_size=self.args.train_batch_size,
                 sampler=train_sampler,
                 collate_fn=self.data_collator,
+                worker_init_fn=seed_worker
             ),
         )
         return data_loader
@@ -241,6 +243,7 @@ class MultitaskTrainer(transformers.Trainer):
                 batch_size=self.args.eval_batch_size,
                 sampler=eval_sampler,
                 collate_fn=self.data_collator,
+                worker_init_fn=seed_worker
             ),
         )
         return data_loader
